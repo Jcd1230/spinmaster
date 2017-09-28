@@ -50,7 +50,7 @@ for i = 1,10 do
  -gravity center 
  -background transparent 
  -extent 128x128 
- -radial-blur 40
+ -radial-blur 30
  -distort SRT 1,]]..((i-1)*36)..[[ 
  -distort Perspective ']]..transform..[[' 
  -extent 128x128 -distort SRT '64,64 1.5 0 36,68'
