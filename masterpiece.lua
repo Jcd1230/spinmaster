@@ -6,10 +6,16 @@ local opts = {
 	rotate_offset_x = 0,
 	rotate_offset_y = 0,
 	scale = 1.5,
-	radial_blur = 30,
+	rotational_blur = 30,
 	final_center_x = -28/128,
 	final_center_y = 10/128,
 	output_size = 128,
+	party = false,
+	party_hue_cycles = 3,
+	background = "background.png",
+	foreground = "foreground.png",
+	frames = 10,
+	spins = 3
 }
 
 
@@ -18,7 +24,7 @@ for i,v in ipairs(args) do
 		local key,val = v:match("(.*)=(.*)")
 		if key and val then
 			if (opts[key] ~= nil) then
-				opts[key] = tonumber(val)
+				opts[key] = type(opts[key])=="number" and tonumber(val) or val
 			else
 				print("Unrecognized option:",key)
 				print("Valid options are:")
@@ -102,47 +108,56 @@ print(transform)
 
 execute("mkdir -p __tmp")
 local resized_to = math.floor(output_size/2).."x"..math.floor(output_size/2)
-execute("convert "..basename.." -resize "..resized_to.." -fuzz 5% -fill none -draw 'matte 0,0 floodfill' __tmp/fidget.png")
+execute("convert "..basename.." -resize "..resized_to.." -fuzz 5% -fill none -draw 'matte 0,0 floodfill'"..(opts.party and " +level-colors ,Red" or "").. " __tmp/fidget.png")
 
-for i = 1,10 do
+local frames = opts.frames - 1
+local spins = opts.spins
+
+local totaldegs = 360*spins
+local degrees_per_frame = (totaldegs / (frames))
+
+for i = 1,frames do
 	local command = [[convert 
 	-compose over 
 	\(
 		-compose over 
-		background.png 
+		#BACKGROUND# 
 		\( __tmp/fidget.png 
 			-virtual-pixel transparent 
 			-gravity center 
 			-background transparent 
 			-extent #BASESIZE#x#BASESIZE# 
-			-radial-blur #RAD_BLUR#
+			-rotational-blur #RAD_BLUR#
 			-distort SRT '#SCALE# 0'
 			-distort SRT '#TRANS_X#,#TRANS_Y# 0'
 			-distort SRT 1,#ROTATION# 
-			-distort Perspective '#TRANSFORM#' 
 			-extent #BASESIZE#x#BASESIZE# 
 			-distort SRT '0,0 1 0 #NEW_COM_X#,#NEW_COM_Y#' 
+			-modulate 100,100,#HUESHIFT#
 		\) 
 		-composite 
 	\) 
-	foreground.png 
+	#FOREGROUND# 
 	-composite 
 	-background white -alpha remove
 	__tmp/a#I#.png
 	]]
 	local options = {
 		I = i,
-		ROTATION = (i-1)*36,
+		ROTATION = (i-1)*degrees_per_frame,
 		TRANSFORM = transform,
 		BASESIZE  = output_size,
-		RAD_BLUR  = opts.radial_blur,
+		RAD_BLUR  = opts.rotational_blur,
 		NEW_COM_X = opts.final_center_x  * output_size,
 		NEW_COM_Y = opts.final_center_y  * output_size,
 		TRANS_X   = opts.rotate_offset_x * output_size,
 		TRANS_Y   = opts.rotate_offset_y * output_size,
 		HX = center_x/2,
 		HY = center_x/2,
-		SCALE = opts.scale
+		SCALE = opts.scale,
+		HUESHIFT = opts.party and (i-1)*(100/frames)*(opts.party_hue_cycles) or 100,
+		BACKGROUND = opts.background,
+		FOREGROUND = opts.foreground
 	}
 	command = command:gsub("#([A-Z_]*)#", function(subject) 
 		if not options[subject] then error("No option '"..subject.."'") end
@@ -151,4 +166,5 @@ for i = 1,10 do
 	execute(command)
 	print("frame ",i)
 end
-execute("convert -delay 3 -dispose Background __tmp/a*.png -fuzz 5% -transparent white __tmp/final.gif")
+execute("convert -delay 3 -dispose Background __tmp/a*.png -fuzz 0% -transparent white __tmp/final.gif")
+execute("convert -delay 3 -dispose Background __tmp/a*.png __tmp/final_opaque.gif")
